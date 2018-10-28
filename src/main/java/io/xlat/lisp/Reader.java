@@ -25,14 +25,14 @@ class Reader {
                 prev.cdr = new Cons();
                 cur = (Cons) prev.cdr;
                 cur.car = read(L);
-                System.out.printf("Read %s%n", cur.car);
+                // System.out.printf("Read %s%n", cur.car);
                 cur.cdr = null;
                 prev = cur;
             }
             L.match(Token.Type.RPAREN);
             return head;
         case EOF:
-            return null;
+            throw new QuitException();
         case ERROR:
             return new SyntaxError(tok.lexeme());
         case INTEGER:
@@ -45,7 +45,7 @@ class Reader {
             L.match(tok.type()); // Eat the symbol.
             return new Symbol(tok.lexeme());
         default:
-            return null;
+            throw new SyntaxError("Unrecognized token: %s", tok.lexeme());
         }
     }
 }

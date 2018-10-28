@@ -13,17 +13,24 @@ class Env {
     }
 
     public Object get(Symbol sym) {
-        Object expr = map.get(sym);
-        if (expr != null) {
-            return expr;
+        if (map.containsKey(sym)) {
+            return map.get(sym);
         }
         if (parent == null) {
-            return null;
+            return Symbol.UNDEFINED;
         }
         return parent.get(sym);
     }
 
+    public Object get(String sym) {
+        return get(new Symbol(sym));
+    }
+
     public void put(Symbol sym, Object expr) {
         map.put(sym, expr);
+    }
+
+    public void put(String sym, Object expr) {
+        put(new Symbol(sym), expr);
     }
 }

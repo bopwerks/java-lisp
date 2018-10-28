@@ -113,7 +113,7 @@ class Lexer {
             while ((ch = in.read()) != EOF && ch != ')' && !Character.isWhitespace(ch)) {
                 sb.appendCodePoint(ch);
             }
-            System.out.printf("Read symbol %s%n", sb.toString());
+            // System.out.printf("Read symbol %s%n", sb.toString());
             return new Token(Token.Type.SYMBOL, sb.toString());
         } catch (IOException err) {
             ch = EOF;

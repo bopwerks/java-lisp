@@ -19,8 +19,7 @@ public class ReaderTest {
     public void testEOF() {
         StringReader sr = new StringReader("");
         Lexer L = new Lexer("stdin", sr);
-        Object obj = Reader.read(L);
-        assertNull(obj);
+        assertThrows(QuitException.class, () -> Reader.read(L));
     }
     
     @Test

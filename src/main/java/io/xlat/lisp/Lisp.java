@@ -2,78 +2,80 @@ package io.xlat.lisp;
 
 import java.io.PushbackReader;
 import java.io.InputStreamReader;
-import java.io.Reader;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.io.IOException;
 
 import java.util.List;
 import java.util.ArrayList;
 
-public class Lisp {
-    public static void main(String[] args) {
-        final java.io.Reader isr = new InputStreamReader(System.in);
-        final PushbackReader input = new PushbackReader(isr);
-        final Env env = new Env(null);
-        for (;;) {
-            Object expr, val;
-            try {
-                expr = read(input);
-            } catch (SyntaxError e) {
-                System.err.println(e);
-                continue;
-            }
-            if (expr == null) {
-                break;
-            }
-            try {
-                val = eval(expr, env);
-            } catch (Exception e) {
-                System.err.printf("Error: %s%n", e);
-                continue;
-            }
-            print(val);
+public class Lisp implements Runnable {
+    private java.io.Reader input;
+    private Writer output;
+    private Lexer lexer;
+    private Env env;
+    
+    public Lisp(java.io.Reader input, Writer output) {
+        if (input == null) {
+            throw new IllegalArgumentException("Input must be non-null");
         }
+        if (output == null) {
+            throw new IllegalArgumentException("Output must be non-null");
+        }
+        this.input = input;
+        this.output = output;
+        this.lexer = new Lexer(input.toString(), input);
+
+        env = new Env(null);
+        env.put("+", new AddFn());
+        env.put("-", new SubtractFn());
+        env.put("*", new MultiplyFn());
+        env.put("cons", new ConsFn());
+        env.put("=", new EqualsFn());
+        env.put("sleep", new SleepFn());
+        env.put("mkchan", new MakeChanFn());
+        env.put("send", new SendFn());
+        env.put("receive", new ReceiveFn());
+        env.put("print", new PrintFn());
+        env.put("null?", new NullFn());
+        env.put("close", new CloseFn());
     }
 
-    private static Object read(PushbackReader r) {
-        return null;
+    private Object read() {
+        Object val = Reader.read(lexer);
+        return val;
     }
 
-    private static Object read(Lexer L) {
-        Token tok = L.peek();
-        switch (tok.type()) {
-        case LPAREN:
-            L.match(Token.Type.LPAREN); // Eat the open-paren.
-            List<Object> list = new ArrayList<Object>();
+    private Object eval(Object expr) {
+        Object val = Evaluator.eval(expr, env);
+        return val;
+    }
+
+    private void print(Object expr) throws IOException {
+        if (expr == null) {
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(Stringer.stringify(expr));
+        sb.append('\n');
+        output.write(sb.toString());
+        output.flush();
+    }
+
+    public void run() {
+        try {
             for (;;) {
-                tok = L.peek();
-                if (tok.type() == Token.Type.RPAREN) {
-                    break;
-                }
-                list.add(read(L));
+                print(eval(read()));
             }
-            L.match(Token.Type.RPAREN);
-            return list;
-        case EOF:
-        case ERROR:
-            return null;
-        case INTEGER:
-            L.match(tok.type()); // Eat the integer.
-            return Integer.parseInt(tok.lexeme());
-        case STRING:
-            L.match(tok.type()); // Eat the string.
-            return tok.lexeme();
-        case SYMBOL:
-            L.match(tok.type()); // Eat the symbol.
-            return new Symbol(tok.lexeme());
-        default:
-            return null;
+        } catch (IOException e) {
+        } catch (QuitException e) {
         }
     }
-
-    private static Object eval(Object expr, Env env) {
-        return null;
-    }
-
-    private static void print(Object expr) {
-        System.out.println(expr);
+    
+    public static void main(String[] args) {
+        java.io.Reader isr = new InputStreamReader(System.in);
+        Writer osw = new OutputStreamWriter(System.out);
+        Lisp lisp = new Lisp(isr, osw);
+        lisp.run();
     }
 }

@@ -30,17 +30,7 @@ class Channel<T> {
     }
 
     public void close() {
-        try {
-            send.acquire();
-            if (isClosed) {
-                send.release();
-                throw new IllegalStateException("Can't close closed channel");
-            }
-            this.obj = null;
-            recv.release();
-            sync.acquire();
-        } catch (InterruptedException e) {
-        }
+        send(null);
     }
 
     public T receive() {
@@ -50,8 +40,8 @@ class Channel<T> {
             if (rval == null) {
                 isClosed = true;
             }
-            send.release();
             sync.release();
+            send.release();
             return rval;
         } catch (InterruptedException e) {
             return null;

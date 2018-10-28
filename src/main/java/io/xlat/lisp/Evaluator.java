@@ -3,54 +3,13 @@ package io.xlat.lisp;
 import java.util.List;
 
 class Evaluator {
-    private static boolean isSymbol(Object expr) {
-        return expr instanceof Symbol;
-    }
-
-    private static boolean isAtom(Object expr) {
-        return expr instanceof Integer || expr instanceof String || expr instanceof Symbol;
-    }
-
-    private static Object car(Object expr) {
-        if (!(expr instanceof Cons)) {
-            return null;
-        }
-        Cons cons = (Cons) expr;
-        return cons.car;
-    }
-
-    private static Object cdr(Object expr) {
-        if (!(expr instanceof Cons)) {
-            return null;
-        }
-        Cons cons = (Cons) expr;
-        return cons.cdr;
-    }
-
-    private static boolean isFunc(Object expr, String name) {
-        if (!(expr instanceof List)) {
-            return false;
-        }
-        List<Object> list = (List<Object>) expr;
-        if (list.size() == 0) {
-            return false;
-        }
-        Object first = list.get(0);
-        if (!isSymbol(first)) {
-            return false;
-        }
-        Symbol sym = (Symbol) first;
-        return sym.toString().equals(name);
-    }
-    
-    public static Object evaluate(Object expr, Env env) {
-        if (expr == null) {
-            throw new IllegalArgumentException("Expression must be non-null");
-        }
+    public static Object eval(Object expr, Env env) {
         if (env == null) {
             throw new IllegalArgumentException("Environment must be non-null");
         }
-        System.out.printf("Evaluating %s%n", Stringer.stringify(expr));
+        if (expr == null) {
+            return null;
+        }
         // Symbols
         if (isSymbol(expr)) {
             Symbol sym = (Symbol) expr;
@@ -61,7 +20,7 @@ class Evaluator {
                 return Symbol.T;
             }
             Object val = env.get(sym);
-            if (val == null) {
+            if (val != null && val.equals(Symbol.UNDEFINED)) {
                 throw new LookupError(sym);
             }
             return val;
@@ -70,107 +29,133 @@ class Evaluator {
         if (isAtom(expr)) {
             return expr;
         }
-        // Expressions
+        // Special forms
         Cons list = (Cons) expr;
-        Object funcSym = list.first();
-        if (funcSym == null) {
-            throw new NullPointerException("car(expr) should be non-null");
+        if (list.car == null) {
+            throw new NullPointerException("nil is not a function");
         }
-        if (!(funcSym instanceof Symbol)) {
-            throw new LookupError("%s is not a function");
-        }
-        String funcName = funcSym.toString();
-        if (funcName.equals("eql?")) {
-            Object a = evaluate(list.second(), env);
-            Object b = evaluate(list.third(), env);
-            if (a != null && b != null) {
-                return a.equals(b);
-            } else if (a == null && b == null) {
-                return Symbol.T;
-            } else {
-                return null;
-            }
-        } else if (funcName.equals("=")) {
-            if (((Integer) evaluate(list.second(), env)).equals((Integer) evaluate(list.third(), env))) {
-                return Symbol.T;
-            } else {
-                return null;
-            }
-        } else if (funcName.equals("<")) {
-            if ((Integer) evaluate(list.second(), env) < (Integer) evaluate(list.third(), env)) {
-                return Symbol.T;
-            } else {
-                return null;
-            }
-        } else if (funcName.equals("<=")) {
-            if ((Integer) evaluate(list.second(), env) <= (Integer) evaluate(list.third(), env)) {
-                return Symbol.T;
-            } else {
-                return null;
-            }
-        } else if (funcName.equals(">")) {
-            if ((Integer) evaluate(list.second(), env) > (Integer) evaluate(list.third(), env)) {
-                return Symbol.T;
-            } else {
-                return null;
-            }
-        } else if (funcName.equals(">=")) {
-            if ((Integer) evaluate(list.second(), env) >= (Integer) evaluate(list.third(), env)) {
-                return Symbol.T;
-            } else {
-                return null;
-            }
-        } else if (funcName.equals("if")) {
-            Object cond = evaluate(list.second(), env);
-            if (cond != null && cond.equals(Symbol.T)) {
-                return evaluate(list.third(), env);
-            } else {
-                return evaluate(list.nth(4), env);
-            }
-        } else if (funcName.equals("or")) {
-            Cons cons = list;
-            do {
-                cons = (Cons) cons.cdr;
-                Object val = evaluate(cons.car, env);
-                if (val != null && val.equals(Symbol.T)) {
-                    return Symbol.T;
+        if (list.car instanceof Symbol) {
+            Symbol funcSym = (Symbol) list.car;
+            String funcName = funcSym.toString();
+            if (funcName.equals("if")) {
+                Object cond = eval(list.second(), env);
+                if (cond != null) {
+                    return eval(list.third(), env);
+                } else {
+                    return eval(list.nth(4), env);
                 }
-            } while (cons.cdr != null);
+            } else if (funcName.equals("or")) {
+                Cons cons = list;
+                do {
+                    cons = (Cons) cons.cdr;
+                    Object val = eval(cons.car, env);
+                    if (val != null && val.equals(Symbol.T)) {
+                        return Symbol.T;
+                    }
+                } while (cons.cdr != null);
+                return null;
+            } else if (funcName.equals("and")) {
+                Cons cons = list;
+                do {
+                    cons = (Cons) cons.cdr;
+                    Object val = eval(cons.car, env);
+                    if (val == null) {
+                        return null;
+                    }
+                } while (cons.cdr != null);
+                return Symbol.T;
+            } else if (funcName.equals("quote")) {
+                return list.second();
+            } else if (funcName.equals("lambda")) {
+                list = (Cons) list.cdr;
+                Cons params = (Cons) list.car;
+                Cons body = (Cons) list.cdr;
+                return new Lambda(params, body);
+            } else if (funcName.equals("define")) {
+                list = (Cons) list.cdr;
+                Cons params = (Cons) list.car;
+                Symbol func = (Symbol) params.car;
+                params = (Cons) params.cdr;
+                Cons body = (Cons) list.cdr;
+                env.put(func, new Lambda(params, body));
+                return null;
+            } else if (funcName.equals("go")) {
+                list = (Cons) list.cdr;
+                Cons lambda = (Cons) list.car;
+                Object fnobj = eval(lambda, env);
+                if (fnobj == null || !(fnobj instanceof Function)) {
+                    throw new SyntaxError("go form requires a lambda");
+                }
+                Function func = (Function) fnobj;
+                Thread t = new Thread(() -> func.apply(null, env));
+                t.start();
+                return null;
+            } else if (funcName.equals("begin")) {
+                list = (Cons) list.cdr;
+                Object val = null;
+                while (list != null) {
+                    val = eval(list.car, env);
+                    list = (Cons) list.cdr;
+                }
+                return val;
+            } else if (funcName.equals("let")) {
+                list = (Cons) list.cdr;
+                Cons pairs = (Cons) list.car;
+                Cons body = (Cons) list.cdr;
+                
+                Env newenv = new Env(env);
+                Cons pair = (Cons) pairs.car;
+                Symbol key = (Symbol) pair.first();
+                Object val = eval(pair.second(), env);
+                env.put(key, val);
+                while (pairs.cdr != null) {
+                    pairs = (Cons) pairs.cdr;
+                    pair = (Cons) pairs.car;
+                    key = (Symbol) pair.first();
+                    val = eval(pair.second(), env);
+                    env.put(key, val);
+                }
+                val = null;
+                while (body != null) {
+                    val = eval(body.car, env);
+                    body = (Cons) body.cdr;
+                }
+                return val;
+            }
+        }
+        // Function calls
+        Cons evalList = mapEval(list, env);
+        if (evalList.car == null || !(evalList.car instanceof Function)) {
+            throw new LookupError("No such function: %s", Stringer.stringify(list.car));
+        }
+        Function func = (Function) evalList.car;
+        return func.apply((Cons) evalList.cdr, env);
+    }
+
+    private static Cons mapEval(Cons list, Env env) {
+        if (list == null) {
             return null;
-        } else if (funcName.equals("and")) {
-            Cons cons = list;
-            do {
-                cons = (Cons) cons.cdr;
-                Object val = evaluate(cons.car, env);
-                if (val == null) {
-                    return null;
-                }
-            } while (cons.cdr != null);
-            return Symbol.T;
-        } else if (funcName.equals("mkchan")) {
-            return new Channel<Object>();
-        } else if (funcName.equals("close")) {
-            Channel<Object> chan = (Channel<Object>) evaluate(list.second(), env);
-            chan.close();
-        } else if (funcName.equals("send")) {
-            Channel<Object> chan = (Channel<Object>) evaluate(list.second(), env);
-            Object obj = evaluate(list.third(), env);
-            chan.send(obj);
-        } else if (funcName.equals("receive")) {
-            Channel<Object> chan = (Channel<Object>) evaluate(list.second(), env);
-            return chan.receive();
-        } else if (funcName.equals("quote")) {
-            return list.second();
-        } else if (funcName.equals("cons")) {
-            Cons c = new Cons();
-            c.car = evaluate(list.second(), env);
-            c.cdr = evaluate(list.third(), env);
-            return c;
-        } else if (funcName.equals("+")) {
-            return (Integer) evaluate(list.second(), env) + (Integer) evaluate(list.third(), env);
-        } else if (funcName.equals("-")) {
-            return (Integer) evaluate(list.second(), env) - (Integer) evaluate(list.third(), env);
         }
-        return null;
+        Cons rval = new Cons();
+        Cons c = rval;
+        c.car = eval(list.car, env);
+        c.cdr = null;
+        Cons p = c;
+        while (list.cdr != null) {
+            list = (Cons) list.cdr;
+            p.cdr = c = new Cons();
+            c.car = eval(list.car, env);
+            c.cdr = null;
+            p = c;
+        }
+        return rval;
+    }
+    
+    private static boolean isSymbol(Object expr) {
+        return expr instanceof Symbol;
+    }
+
+    private static boolean isAtom(Object expr) {
+        return expr != null && !(expr instanceof Cons);
     }
 }

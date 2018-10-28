@@ -44,4 +44,22 @@ class Cons {
         }
         return cons.car;
     }
+
+    public static Cons fromElements(Object... elts) {
+        if (elts.length == 0) {
+            return null;
+        }
+        Cons head = new Cons();
+        Cons c = head;
+        c.car = elts[0];
+        c.cdr = null;
+        Cons p = c;
+        for (int i = 1; i < elts.length; ++i) {
+            p.cdr = c = new Cons();
+            c.car = elts[i];
+            c.cdr = null;
+            p = c;
+        }
+        return head;
+    }
 }

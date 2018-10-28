@@ -3,6 +3,7 @@ package io.xlat.lisp;
 class Symbol {
     public final static Symbol NIL = new Symbol("nil");
     public final static Symbol T = new Symbol("t");
+    public final static Symbol UNDEFINED = new Symbol("");
 
     private String str;
     
