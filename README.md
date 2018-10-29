@@ -30,6 +30,10 @@ The following code launches 500 threads. Each thread reads a number from an inpu
     (receive output)))
 ```
 
+## Building
+
+This project uses Maven. Run `mvn compile test` and run the `io.xlat.lisp.Lisp` class.
+
 ## Bugs
 
 Yes.
